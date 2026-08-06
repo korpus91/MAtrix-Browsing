@@ -1,0 +1,25 @@
+{
+  "name": "matrix-browsing",
+  "version": "1.0.0",
+  "description": "A single-file, no-build HTML/CSS/JS toy: a Matrix-style \"hacker terminal\" that lets you type in any URL and load it in a green, scanlined iframe view.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/korpus91/matrix-browsing.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/korpus91/matrix-browsing/issues"
+  },
+  "homepage": "https://github.com/korpus91/matrix-browsing#readme",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
+    "systeminformation": "^5.33.1"
+  }
+}

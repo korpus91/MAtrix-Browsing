@@ -1,21 +1,35 @@
 # Matrix Web Access Terminal
 
-A single-file, no-build HTML/CSS/JS toy: a Matrix-style "hacker terminal" that
-lets you type in any URL and load it in a green, scanlined iframe view.
+A Matrix-style "hacker terminal": web-access iframe browser, a local system
+specs readout, and an in-character AI chat panel ("ORACLE") backed by the
+Claude API.
 
 ## Run it
 
-No server, no dependencies. Just open `index.html` in a browser:
+Now needs a local server (for the specs readout and the chat proxy):
 
 ```
-open matrix-browser/index.html      # macOS
-xdg-open matrix-browser/index.html  # Linux
+cd matrix-browsing
+npm install
+export ANTHROPIC_API_KEY=sk-ant-...   # only needed for ORACLE chat
+node server.js
 ```
 
-Click/press any key to skip the boot animation, then type a destination
+Open `http://localhost:4173`. Click/press any key to skip the boot
+animation. Two panels dock top-right:
+
+- **SPECS** — CPU, RAM, disk, GPU, read straight from your machine via the
+  `systeminformation` library. Polls every 3 seconds. No network calls, no
+  API tokens spent — it's pure local `os`/hardware queries.
+- **ORACLE** — a themed chat panel that calls the real Claude API
+  (`claude-opus-5`) through `server.js`, so your API key stays on the
+  server and never reaches the browser. Requires `ANTHROPIC_API_KEY` to be
+  set; each message costs normal API usage.
+
+The original address bar still works the same way: type a destination
 (e.g. `wikipedia.org`) and hit **JACK IN**.
 
-## Known limitation
+## Known limitation (web access)
 
 Many sites (Google, most banks, GitHub, etc.) send an `X-Frame-Options` or
 `Content-Security-Policy: frame-ancestors` header that blocks being loaded
@@ -24,6 +38,10 @@ and can't be bypassed from here. When a site refuses to load within ~3
 seconds, the terminal logs it and opens the real page in a new browser tab
 instead ("opens a portal").
 
-This is a plain static page, not sandboxed — it's meant to be opened
-directly in a browser, not embedded as a Claude Artifact (which blocks
-cross-origin iframes by policy).
+## Notes
+
+This is a real Node app now (`server.js` + `package.json`), not a static
+file — it needs `node server.js` running, and it's not embeddable as a
+Claude Artifact (iframes to arbitrary origins are blocked by Artifact CSP,
+and the chat/specs endpoints need a real server). `node_modules/` and any
+`.env` file are gitignored — never commit your API key.

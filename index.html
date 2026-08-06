@@ -99,11 +99,75 @@
   }
   .blink { animation: blink 1s step-start infinite; }
   @keyframes blink { 50% { opacity: 0; } }
+
+  #dock {
+    position: fixed; top: 16px; right: 16px; z-index: 15;
+    display: flex; gap: 8px;
+  }
+  #dock button { padding: 6px 12px; font-size: 11px; }
+  .panel {
+    position: fixed; top: 0; right: -360px; width: 340px; height: 100%;
+    z-index: 25; background: rgba(0,5,0,0.96); border-left: 1px solid var(--green);
+    padding: 50px 14px 14px; transition: right 0.25s ease;
+    display: flex; flex-direction: column; font-size: 12px;
+  }
+  .panel.open { right: 0; }
+  .panel h2 {
+    font-size: 13px; margin: 0 0 10px; letter-spacing: 1px;
+    text-shadow: 0 0 6px var(--green);
+  }
+  .panel-close {
+    position: absolute; top: 14px; right: 14px; padding: 4px 8px; font-size: 11px;
+  }
+
+  #oracle-log {
+    flex: 1; overflow-y: auto; border: 1px solid var(--green-dim);
+    padding: 8px; margin-bottom: 8px; background: rgba(0,20,5,0.4);
+    white-space: pre-wrap; line-height: 1.4em;
+  }
+  .oracle-user { color: #fff; opacity: 0.8; }
+  .oracle-assistant { color: var(--green); text-shadow: 0 0 4px var(--green); }
+  #oracle-input-row { display: flex; gap: 6px; }
+  #oracle-input {
+    flex: 1; background: #000; border: 1px solid var(--green); color: var(--green);
+    padding: 8px; font-family: inherit; font-size: 12px; outline: none;
+  }
+
+  #specs-body { overflow-y: auto; }
+  .specs-row {
+    display: flex; justify-content: space-between; gap: 8px;
+    padding: 4px 0; border-bottom: 1px dashed var(--green-dim);
+  }
+  .specs-section { margin-top: 14px; opacity: 0.9; }
+  .specs-section:first-child { margin-top: 0; }
+  .specs-bar { height: 4px; background: var(--green-dim); margin-top: 3px; }
+  .specs-bar-fill { height: 100%; background: var(--green); }
 </style>
 </head>
 <body>
 
 <canvas id="rain"></canvas>
+
+<div id="dock">
+  <button id="specs-toggle">SPECS</button>
+  <button id="oracle-toggle">ORACLE</button>
+</div>
+
+<div id="specs-panel" class="panel">
+  <button class="panel-close" data-close="specs-panel">CLOSE</button>
+  <h2>&gt; SYSTEM SCAN</h2>
+  <div id="specs-body">reading local machine...</div>
+</div>
+
+<div id="oracle-panel" class="panel">
+  <button class="panel-close" data-close="oracle-panel">CLOSE</button>
+  <h2>&gt; ORACLE</h2>
+  <div id="oracle-log"></div>
+  <div id="oracle-input-row">
+    <input id="oracle-input" type="text" placeholder="ask something..." autocomplete="off">
+    <button id="oracle-send">SEND</button>
+  </div>
+</div>
 
 <div id="boot">
   <div id="bootText"></div>
@@ -256,6 +320,123 @@ function jackIn() {
 
 goBtn.addEventListener('click', jackIn);
 urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') jackIn(); });
+
+// ---------- Side panels (dock) ----------
+document.getElementById('specs-toggle').addEventListener('click', () => togglePanel('specs-panel'));
+document.getElementById('oracle-toggle').addEventListener('click', () => togglePanel('oracle-panel'));
+document.querySelectorAll('.panel-close').forEach(btn => {
+  btn.addEventListener('click', () => document.getElementById(btn.dataset.close).classList.remove('open'));
+});
+
+function togglePanel(id) {
+  const el = document.getElementById(id);
+  const opening = !el.classList.contains('open');
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('open'));
+  if (opening) {
+    el.classList.add('open');
+    if (id === 'specs-panel') loadSpecs();
+  }
+}
+
+// ---------- SPECS: local machine readout, no API calls, no tokens ----------
+const specsBody = document.getElementById('specs-body');
+let specsPoll = null;
+
+function bar(percent) {
+  return `<div class="specs-bar"><div class="specs-bar-fill" style="width:${percent}%"></div></div>`;
+}
+
+function renderSpecs(s) {
+  specsBody.innerHTML = `
+    <div class="specs-section">
+      <div class="specs-row"><span>HOST</span><span>${s.hostname}</span></div>
+      <div class="specs-row"><span>OS</span><span>${s.os}</span></div>
+    </div>
+    <div class="specs-section">
+      <div class="specs-row"><span>CPU</span><span>${s.cpu.model}</span></div>
+      <div class="specs-row"><span>CORES</span><span>${s.cpu.physicalCores} phys / ${s.cpu.cores} logical @ ${s.cpu.speedGhz}GHz</span></div>
+      <div class="specs-row"><span>LOAD</span><span>${s.cpu.loadPercent}%</span></div>
+      ${bar(s.cpu.loadPercent)}
+      ${s.cpu.tempC != null ? `<div class="specs-row"><span>TEMP</span><span>${s.cpu.tempC}&deg;C</span></div>` : ''}
+    </div>
+    <div class="specs-section">
+      <div class="specs-row"><span>RAM</span><span>${s.memory.usedGb} / ${s.memory.totalGb} GB</span></div>
+      ${bar(s.memory.usedPercent)}
+    </div>
+    <div class="specs-section">
+      ${s.disks.map(d => `
+        <div class="specs-row"><span>DISK ${d.mount}</span><span>${d.usedPercent}% of ${d.totalGb}GB</span></div>
+        ${bar(d.usedPercent)}
+      `).join('')}
+    </div>
+    <div class="specs-section">
+      ${s.gpu.length ? s.gpu.map(g => `
+        <div class="specs-row"><span>GPU</span><span>${g.model}${g.vramMb ? ` (${g.vramMb}MB)` : ''}</span></div>
+      `).join('') : '<div class="specs-row"><span>GPU</span><span>none detected</span></div>'}
+    </div>
+  `;
+}
+
+async function loadSpecs() {
+  try {
+    const res = await fetch('/api/specs');
+    const data = await res.json();
+    if (data.error) { specsBody.textContent = `[ ${data.error} ]`; return; }
+    renderSpecs(data);
+  } catch (err) {
+    specsBody.textContent = '[ specs server unreachable -- run "node server.js" ]';
+  }
+  if (!specsPoll) specsPoll = setInterval(loadSpecs, 3000); // cheap local poll, no tokens involved
+}
+
+// ---------- ORACLE: chat panel backed by the Claude API ----------
+const oracleLog = document.getElementById('oracle-log');
+const oracleInput = document.getElementById('oracle-input');
+const oracleSend = document.getElementById('oracle-send');
+let oracleHistory = [];
+
+function oracleAppend(role, text) {
+  const line = document.createElement('div');
+  line.className = `oracle-${role}`;
+  line.textContent = (role === 'user' ? '> ' : 'ORACLE: ') + text;
+  oracleLog.appendChild(line);
+  oracleLog.scrollTop = oracleLog.scrollHeight;
+  return line;
+}
+
+async function oracleAsk() {
+  const msg = oracleInput.value.trim();
+  if (!msg) return;
+  oracleInput.value = '';
+  oracleAppend('user', msg);
+
+  const historyToSend = oracleHistory.slice();
+  oracleHistory.push({ role: 'user', content: msg });
+
+  const pending = oracleAppend('assistant', '...');
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, history: historyToSend }),
+    });
+    const data = await res.json();
+    const reply = data.reply || data.error || '[no response]';
+    oracleHistory.push({ role: 'assistant', content: reply });
+
+    pending.textContent = 'ORACLE: ';
+    for (const ch of reply) {
+      pending.textContent += ch;
+      oracleLog.scrollTop = oracleLog.scrollHeight;
+      await new Promise(r => setTimeout(r, 6));
+    }
+  } catch (err) {
+    pending.textContent = 'ORACLE: [connection lost -- is "node server.js" running?]';
+  }
+}
+
+oracleSend.addEventListener('click', oracleAsk);
+oracleInput.addEventListener('keydown', e => { if (e.key === 'Enter') oracleAsk(); });
 </script>
 
 </body>
