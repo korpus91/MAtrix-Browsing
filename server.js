@@ -13,10 +13,30 @@ const si = require('systeminformation');
 const PORT = process.env.PORT || 4173; // EDIT: change if 4173 is taken
 const PUBLIC_DIR = __dirname;
 
-if (!process.env.ANTHROPIC_API_KEY) {
-  console.warn('ANTHROPIC_API_KEY is not set -- the ORACLE chat panel will not work.');
-  console.warn('  export ANTHROPIC_API_KEY=sk-ant-...');
-  console.warn('The specs panel works fine without it.');
+// Minimal .env loader (no dependency) so the key only has to be typed once,
+// into a file, instead of set in the shell every session.
+try {
+  const envPath = path.join(__dirname, '.env');
+  if (fs.existsSync(envPath)) {
+    for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eq = trimmed.indexOf('=');
+      if (eq === -1) continue;
+      const key = trimmed.slice(0, eq).trim();
+      const value = trimmed.slice(eq + 1).trim();
+      if (key && !(key in process.env)) process.env[key] = value;
+    }
+  }
+} catch (err) {
+  console.warn('[.env] could not read .env file:', err.message);
+}
+
+if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'paste-your-real-key-here') {
+  console.warn('ANTHROPIC_API_KEY is not set (or is still the placeholder) -- ORACLE chat will not work.');
+  console.warn('  Copy .env.example to .env and paste your real key in.');
+  console.warn('The SPECS panel works fine without it.');
+  if (process.env.ANTHROPIC_API_KEY === 'paste-your-real-key-here') delete process.env.ANTHROPIC_API_KEY;
 }
 
 const client = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null; // reads ANTHROPIC_API_KEY from env
