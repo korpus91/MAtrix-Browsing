@@ -2,441 +2,442 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>MATRIX // WEB ACCESS TERMINAL</title>
+<title>CONSTRUCT</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230D1310'/%3E%3Crect x='3' y='3' width='10' height='2' fill='%2382D399'/%3E%3Crect x='3' y='7' width='7' height='2' fill='%23C5D0C9'/%3E%3Crect x='3' y='11' width='4' height='2' fill='%236F7772'/%3E%3C/svg%3E">
 <style>
+  /* ---------------------------------------------------------------------
+     DEEP NOIR. Green is a light source, not a text color.
+     Body text is a green-tinted bone grey; saturated phosphor is rationed
+     to things that are actually live. Severity lives in background fill,
+     never in glyph color, so a critical row costs no extra reading effort.
+     --------------------------------------------------------------------- */
   :root {
-    --green: #00ff41;
-    --green-dim: #0a3b18;
-    --bg: #000000;
+    --void:    #050706;
+    --bg:      #0D1310;   /* never #000 — true black maximizes halation */
+    --panel:   #131A16;
+    --raised:  #1B241F;
+    --edge:    #232D27;
+    --edge-hi: #404D46;
+
+    --ink-hi:  #DAE7DE;   /* never #FFF */
+    --ink:     #C5D0C9;   /* body. ~4% saturation, all three subpixels lit */
+    --ink-mid: #96A09A;
+    --ink-dim: #6F7772;
+
+    --phos-lo: #569369;
+    --phos:    #82D399;
+    --phos-hi: #9BF5AE;
+    --amber:   #EEBB5E;
+    --blood:   #EB7F76;
+
+    --fill-crit: #321816;
+    --fill-warn: #2B1F0B;
+    --fill-ok:   #16301F;
+
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", Consolas, monospace;
   }
+  :root[data-theme="light"], :root[data-theme="dark"] { color-scheme: dark; }
+
   * { box-sizing: border-box; }
-  html, body {
-    margin: 0; padding: 0; height: 100%; background: var(--bg);
-    font-family: "Courier New", Consolas, monospace;
+
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.55;
+    font-variant-numeric: tabular-nums slashed-zero;
     overflow: hidden;
-    color: var(--green);
   }
-  #rain {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0;
+
+  /* Rain lives at z0, all readable DOM at z1 with NO filter ancestors,
+     atmosphere at z2 as a sibling — never a wrapper around text. */
+  #rain { position: fixed; inset: 0; z-index: 0; opacity: 0.16; }
+  #atmos {
+    position: fixed; inset: 0; z-index: 2; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 40%, transparent 45%, rgba(5,7,6,0.55) 100%);
   }
-  #boot {
-    position: fixed; inset: 0; z-index: 20;
-    background: rgba(0,0,0,0.92);
-    display: flex; align-items: center; justify-content: center;
-    flex-direction: column;
-    padding: 20px; text-align: left;
-  }
-  #bootText {
-    white-space: pre-wrap;
-    font-size: 15px;
-    line-height: 1.5em;
-    max-width: 700px;
-    text-shadow: 0 0 6px var(--green);
-  }
-  #skipHint {
-    margin-top: 20px; opacity: 0.5; font-size: 12px;
-  }
+
   #app {
-    position: relative; z-index: 10;
-    display: none;
-    flex-direction: column;
-    height: 100vh;
-    padding: 18px;
+    position: relative; z-index: 1;
+    height: 100vh; display: grid;
+    grid-template-rows: auto auto 1fr;
+    gap: 0;
   }
-  #app.visible { display: flex; }
+
+  /* ---- masthead ---- */
   header {
-    display: flex; align-items: baseline; gap: 12px;
-    border-bottom: 1px solid var(--green-dim);
-    padding-bottom: 10px; margin-bottom: 10px;
-    text-shadow: 0 0 6px var(--green);
+    display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap;
+    padding: 0.85rem 1.2rem;
+    border-bottom: 1px solid var(--edge);
+    background: rgba(13,19,16,0.82);
   }
-  header h1 { font-size: 16px; margin: 0; letter-spacing: 2px; }
-  header .status { font-size: 11px; opacity: 0.6; }
+  header .mark { color: var(--ink-hi); font-weight: 600; letter-spacing: 0.16em; font-size: 0.8125rem; }
+  header .sub { color: var(--ink-dim); font-size: 0.6875rem; letter-spacing: 0.1em; text-transform: uppercase; }
+  header .spacer { flex: 1; }
+  header .stat { color: var(--ink-mid); font-size: 0.6875rem; letter-spacing: 0.06em; }
+  header .stat b { color: var(--phos); font-weight: 600; }
+
+  /* ---- probe bar ---- */
   #bar {
-    display: flex; gap: 8px; margin-bottom: 10px;
+    display: flex; gap: 0.6rem; padding: 0.85rem 1.2rem;
+    border-bottom: 1px solid var(--edge);
+    background: rgba(19,26,22,0.75);
   }
-  #url {
-    flex: 1;
-    background: #000; border: 1px solid var(--green);
-    color: var(--green); padding: 10px 12px; font-family: inherit;
-    font-size: 14px; outline: none; text-shadow: 0 0 4px var(--green);
+  #target {
+    flex: 1; min-width: 0;
+    background: var(--void); border: 1px solid var(--edge-hi);
+    color: var(--ink-hi); font-family: inherit; font-size: 0.9375rem;
+    padding: 0.6rem 0.75rem; outline: none;
   }
-  #url::placeholder { color: var(--green-dim); }
+  #target::placeholder { color: var(--ink-dim); }
+  #target:focus { border-color: var(--phos-lo); }
   button {
-    background: #000; border: 1px solid var(--green); color: var(--green);
-    padding: 10px 16px; font-family: inherit; cursor: pointer; font-size: 13px;
-    letter-spacing: 1px; text-shadow: 0 0 4px var(--green);
+    background: var(--raised); border: 1px solid var(--edge-hi); color: var(--ink-hi);
+    font-family: inherit; font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase;
+    padding: 0.6rem 1.1rem; cursor: pointer;
+    transition: background 100ms ease-out, border-color 100ms ease-out;
   }
-  button:hover { background: var(--green); color: #000; text-shadow: none; }
+  button:hover { border-color: var(--phos-lo); color: var(--phos-hi); }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  :focus-visible { outline: 2px solid var(--phos); outline-offset: 2px; }
+
+  /* ---- results ---- */
+  #results { overflow-y: auto; padding: 1.2rem; display: flex; flex-direction: column; gap: 0.9rem; }
+  #results::-webkit-scrollbar { width: 10px; }
+  #results::-webkit-scrollbar-thumb { background: var(--raised); }
+
+  .empty { color: var(--ink-dim); max-width: 62ch; display: flex; flex-direction: column; gap: 0.6rem; }
+  .empty b { color: var(--ink-mid); font-weight: 600; }
+
+  .stage {
+    border: 1px solid var(--edge);
+    border-left: 2px solid var(--edge-hi);
+    background: rgba(19,26,22,0.88);
+  }
+  .stage.running { border-left-color: var(--amber); }
+  .stage.ok      { border-left-color: var(--phos-lo); }
+  .stage.failed  { border-left-color: var(--blood); }
+
+  .stage-head {
+    display: flex; align-items: baseline; gap: 0.8rem;
+    padding: 0.55rem 0.85rem;
+    border-bottom: 1px solid var(--edge);
+  }
+  .stage-head .name {
+    color: var(--ink-hi); font-size: 0.6875rem; letter-spacing: 0.14em;
+    text-transform: uppercase; font-weight: 600; min-width: 5.5rem;
+  }
+  .stage-head .verdict { color: var(--ink-mid); font-size: 0.8125rem; flex: 1; min-width: 0; }
+  .stage-head .ms { color: var(--ink-dim); font-size: 0.6875rem; }
+
+  .stage-body { padding: 0.7rem 0.85rem; display: flex; flex-direction: column; gap: 0.35rem; }
+  .row { display: flex; gap: 0.75rem; align-items: baseline; flex-wrap: wrap; }
+  .row .k { color: var(--ink-dim); min-width: 7rem; font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; }
+  .row .v { color: var(--ink); flex: 1; min-width: 0; word-break: break-word; }
+  .row .v.live { color: var(--phos); }
+  .row .v.mute { color: var(--ink-mid); }
+
+  .pill {
+    display: inline-block; padding: 0.05em 0.5em; border-radius: 2px;
+    color: var(--ink-hi); font-size: 0.75rem; letter-spacing: 0.06em;
+  }
+  .p-crit { background: var(--fill-crit); }
+  .p-warn { background: var(--fill-warn); }
+  .p-ok   { background: var(--fill-ok); }
+
+  .chain { display: flex; flex-direction: column; gap: 0.2rem; }
+  .hop { display: flex; gap: 0.6rem; align-items: baseline; font-size: 0.8125rem; }
+  .hop .code { color: var(--ink-mid); min-width: 2.5rem; }
+  .hop .u { color: var(--ink); word-break: break-all; }
+  .hop.insecure .u { color: var(--amber); }
+
+  .timing { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+  .timing div { display: flex; flex-direction: column; }
+  .timing .lab { color: var(--ink-dim); font-size: 0.625rem; text-transform: uppercase; letter-spacing: 0.1em; }
+  .timing .val { color: var(--ink-hi); font-size: 1rem; }
+
+  /* ---- log rail ---- */
   #log {
-    height: 90px; overflow-y: auto; font-size: 12px; opacity: 0.85;
-    border: 1px solid var(--green-dim); padding: 6px 10px; margin-bottom: 10px;
-    background: rgba(0,20,5,0.4);
+    border-top: 1px solid var(--edge); background: rgba(5,7,6,0.9);
+    padding: 0.5rem 1.2rem; max-height: 8.5rem; overflow-y: auto;
+    font-size: 0.75rem; color: var(--ink-mid);
   }
-  #log div { margin: 2px 0; }
-  #viewport {
-    flex: 1; position: relative; border: 1px solid var(--green);
-    background: #000;
-    overflow: hidden;
-  }
-  #viewport iframe {
-    width: 100%; height: 100%; border: none;
-    filter: grayscale(1) sepia(1) hue-rotate(60deg) saturate(4) brightness(0.9) contrast(1.1);
-    background: #000;
-  }
-  #scanlines {
-    position: absolute; inset: 0; pointer-events: none;
-    background: repeating-linear-gradient(
-      to bottom, rgba(0,255,65,0.04) 0px, rgba(0,255,65,0.04) 1px,
-      transparent 2px, transparent 3px
-    );
-    mix-blend-mode: overlay;
-  }
-  #placeholder {
-    position: absolute; inset: 0; display: flex; align-items: center;
-    justify-content: center; text-align: center; padding: 20px; font-size: 13px; opacity: 0.7;
-  }
-  .blink { animation: blink 1s step-start infinite; }
-  @keyframes blink { 50% { opacity: 0; } }
+  #log div { display: flex; gap: 0.7rem; }
+  #log .t { color: var(--ink-dim); }
 
-  #dock {
-    position: fixed; top: 16px; right: 16px; z-index: 15;
-    display: flex; gap: 8px;
-  }
-  #dock button { padding: 6px 12px; font-size: 11px; }
-  .panel {
-    position: fixed; top: 0; right: -360px; width: 340px; height: 100%;
-    z-index: 25; background: rgba(0,5,0,0.96); border-left: 1px solid var(--green);
-    padding: 50px 14px 14px; transition: right 0.25s ease;
-    display: flex; flex-direction: column; font-size: 12px;
-  }
-  .panel.open { right: 0; }
-  .panel h2 {
-    font-size: 13px; margin: 0 0 10px; letter-spacing: 1px;
-    text-shadow: 0 0 6px var(--green);
-  }
-  .panel-close {
-    position: absolute; top: 14px; right: 14px; padding: 4px 8px; font-size: 11px;
-  }
-
-  #oracle-log {
-    flex: 1; overflow-y: auto; border: 1px solid var(--green-dim);
-    padding: 8px; margin-bottom: 8px; background: rgba(0,20,5,0.4);
-    white-space: pre-wrap; line-height: 1.4em;
-  }
-  .oracle-user { color: #fff; opacity: 0.8; }
-  .oracle-assistant { color: var(--green); text-shadow: 0 0 4px var(--green); }
-  #oracle-input-row { display: flex; gap: 6px; }
-  #oracle-input {
-    flex: 1; background: #000; border: 1px solid var(--green); color: var(--green);
-    padding: 8px; font-family: inherit; font-size: 12px; outline: none;
-  }
-
-  #specs-body { overflow-y: auto; }
-  .specs-row {
-    display: flex; justify-content: space-between; gap: 8px;
-    padding: 4px 0; border-bottom: 1px dashed var(--green-dim);
-  }
-  .specs-section { margin-top: 14px; opacity: 0.9; }
-  .specs-section:first-child { margin-top: 0; }
-  .specs-bar { height: 4px; background: var(--green-dim); margin-top: 3px; }
-  .specs-bar-fill { height: 100%; background: var(--green); }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
 
 <canvas id="rain"></canvas>
-
-<div id="dock">
-  <button id="specs-toggle">SPECS</button>
-  <button id="oracle-toggle">ORACLE</button>
-</div>
-
-<div id="specs-panel" class="panel">
-  <button class="panel-close" data-close="specs-panel">CLOSE</button>
-  <h2>&gt; SYSTEM SCAN</h2>
-  <div id="specs-body">reading local machine...</div>
-</div>
-
-<div id="oracle-panel" class="panel">
-  <button class="panel-close" data-close="oracle-panel">CLOSE</button>
-  <h2>&gt; ORACLE</h2>
-  <div id="oracle-log"></div>
-  <div id="oracle-input-row">
-    <input id="oracle-input" type="text" placeholder="ask something..." autocomplete="off">
-    <button id="oracle-send">SEND</button>
-  </div>
-</div>
-
-<div id="boot">
-  <div id="bootText"></div>
-  <div id="skipHint">press any key or click to skip</div>
-</div>
+<div id="atmos"></div>
 
 <div id="app">
   <header>
-    <h1>&gt; WEB ACCESS TERMINAL</h1>
-    <span class="status">connection: encrypted // node: unknown</span>
+    <span class="mark">CONSTRUCT</span>
+    <span class="sub">url forensics</span>
+    <span class="spacer"></span>
+    <span class="stat" id="hoststat">—</span>
+    <span class="stat" id="costat">frame budget <b>—</b></span>
   </header>
 
   <div id="bar">
-    <input id="url" type="text" placeholder="enter destination url, e.g. wikipedia.org" autocomplete="off">
-    <button id="go">JACK IN</button>
+    <input id="target" type="text" placeholder="domain or url — try: cnn" autocomplete="off" spellcheck="false">
+    <button id="go">Probe</button>
   </div>
 
-  <div id="log"></div>
-
-  <div id="viewport">
-    <div id="placeholder">
-      [ NO SIGNAL ]<br><br>
-      Type an address above and hit JACK IN.<br>
-      Some sites refuse to be viewed through the wire (X-Frame-Options / CSP) — those will open in a new portal instead.
+  <div id="results">
+    <div class="empty">
+      <b>Node is not a browser, and that is the point.</b>
+      <span>X-Frame-Options is an instruction to a rendering engine. A server-side client ignores it and sees strictly more: the full redirect chain, the real certificate, the negotiated cipher, and honest per-phase timing.</span>
+      <span>Type a domain above. Every number reported is measured — nothing is estimated, and no delay is ever faked.</span>
     </div>
-    <div id="scanlines"></div>
   </div>
 </div>
 
+<div id="log"></div>
+
 <script>
-// ---------- Matrix digital rain ----------
-const canvas = document.getElementById('rain');
-const ctx = canvas.getContext('2d');
-let cols, drops;
-const chars = "アイウエオカキクケコサシスセソタチツテト0123456789ZXCVBNM";
+'use strict';
 
-function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-  cols = Math.floor(canvas.width / 16);
-  drops = new Array(cols).fill(0);
-}
-window.addEventListener('resize', resize);
-resize();
-
-function drawRain() {
-  ctx.fillStyle = 'rgba(0,0,0,0.06)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#00ff41';
-  ctx.font = '15px monospace';
-  for (let i = 0; i < drops.length; i++) {
-    const text = chars[Math.floor(Math.random() * chars.length)];
-    ctx.fillText(text, i * 16, drops[i] * 16);
-    if (drops[i] * 16 > canvas.height && Math.random() > 0.975) drops[i] = 0;
-    drops[i]++;
-  }
-}
-setInterval(drawRain, 40);
-
-// ---------- Boot sequence ----------
-const bootLines = [
-  "WAKE UP...",
-  "THE TERMINAL IS OPENING.",
-  "",
-  "> establishing uplink..........[OK]",
-  "> spoofing node signature......[OK]",
-  "> loading render filters.......[OK]",
-  "> web access module............[READY]",
-  "",
-  "Follow the white rabbit."
-];
-const bootText = document.getElementById('bootText');
-const boot = document.getElementById('boot');
-const app = document.getElementById('app');
-let bootDone = false;
-
-async function typeBoot() {
-  for (const line of bootLines) {
-    for (const ch of line) {
-      if (bootDone) return;
-      bootText.textContent += ch;
-      await new Promise(r => setTimeout(r, 12));
-    }
-    bootText.textContent += "\n";
-    await new Promise(r => setTimeout(r, 180));
-  }
-  await new Promise(r => setTimeout(r, 700));
-  enterApp();
-}
-
-function enterApp() {
-  if (bootDone) return;
-  bootDone = true;
-  boot.style.display = 'none';
-  app.classList.add('visible');
-}
-document.addEventListener('keydown', enterApp);
-boot.addEventListener('click', enterApp);
-typeBoot();
-
-// ---------- Web access ----------
-const urlInput = document.getElementById('url');
-const goBtn = document.getElementById('go');
-const viewport = document.getElementById('viewport');
-const placeholder = document.getElementById('placeholder');
+// ---- log -----------------------------------------------------------------
 const logEl = document.getElementById('log');
-
 function log(msg) {
   const d = document.createElement('div');
-  const t = new Date().toLocaleTimeString();
-  d.textContent = `[${t}] ${msg}`;
-  logEl.appendChild(d);
-  logEl.scrollTop = logEl.scrollHeight;
+  const t = document.createElement('span'); t.className = 't';
+  t.textContent = new Date().toLocaleTimeString('en-GB');
+  const m = document.createElement('span'); m.textContent = msg;
+  d.append(t, m); logEl.append(d); logEl.scrollTop = logEl.scrollHeight;
 }
 
-function normalizeUrl(raw) {
-  raw = raw.trim();
-  if (!raw) return null;
-  if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
-  return raw;
+// ---- rain ----------------------------------------------------------------
+// rAF with a fixed-step accumulator. setInterval(40ms) divides neither 60Hz
+// nor 144Hz and beats against vsync. Stops entirely when hidden.
+const canvas = document.getElementById('rain');
+const ctx = canvas.getContext('2d', { alpha: true });
+const GLYPHS = 'ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍ0123456789';
+let cols = [], cw = 14, rowH = 16, dpr = 1;
+
+function sizeCanvas() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.floor(innerWidth * dpr);
+  canvas.height = Math.floor(innerHeight * dpr);
+  canvas.style.width = innerWidth + 'px';
+  canvas.style.height = innerHeight + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const n = Math.ceil(innerWidth / cw);
+  cols = Array.from({ length: n }, (_, i) => cols[i] || {
+    y: Math.random() * -60,
+    speed: 0.35 + Math.random() * 0.5,
+  });
 }
+addEventListener('resize', sizeCanvas);
+sizeCanvas();
 
-function jackIn() {
-  const target = normalizeUrl(urlInput.value);
-  if (!target) { log('no destination entered.'); return; }
-
-  log(`connecting to ${target} ...`);
-  placeholder.style.display = 'none';
-
-  const old = viewport.querySelector('iframe');
-  if (old) old.remove();
-
-  const iframe = document.createElement('iframe');
-  iframe.src = target;
-
-  let loaded = false;
-  iframe.onload = () => { loaded = true; log(`link established: ${target}`); };
-  viewport.insertBefore(iframe, viewport.querySelector('#scanlines'));
-
-  // Many sites block iframe embedding outright (X-Frame-Options/CSP).
-  // The browser will silently fail to render in that case, so fall back
-  // to opening a real tab after a short grace period.
-  setTimeout(() => {
-    if (!loaded) {
-      log(`${target} refused the wire (frame blocked). opening external portal.`);
-      window.open(target, '_blank', 'noopener,noreferrer');
+let last = 0, acc = 0, frames = 0, frameMs = 0;
+const STEP = 1000 / 30; // rain needs 30Hz, not 144
+function tick(now) {
+  if (document.hidden) { last = now; requestAnimationFrame(tick); return; }
+  const t0 = performance.now();
+  if (!last) last = now;
+  acc += Math.min(now - last, 250);
+  last = now;
+  while (acc >= STEP) { step(); acc -= STEP; }
+  frameMs += performance.now() - t0;
+  if (++frames >= 60) {
+    document.querySelector('#costat b').textContent = (frameMs / frames).toFixed(2) + 'ms';
+    frames = 0; frameMs = 0;
+  }
+  requestAnimationFrame(tick);
+}
+function step() {
+  ctx.fillStyle = 'rgba(13,19,16,0.10)';
+  ctx.fillRect(0, 0, innerWidth, innerHeight);
+  ctx.font = '13px ' + getComputedStyle(document.body).fontFamily;
+  for (let i = 0; i < cols.length; i++) {
+    const c = cols[i];
+    const g = GLYPHS[(Math.random() * GLYPHS.length) | 0];
+    const y = c.y * rowH;
+    if (y > -rowH && y < innerHeight + rowH) {
+      ctx.fillStyle = '#9BF5AE';                 // brighter lead glyph
+      ctx.fillText(g, i * cw, y);
+      ctx.fillStyle = 'rgba(86,147,105,0.55)';   // dimmer trail
+      ctx.fillText(GLYPHS[(Math.random() * GLYPHS.length) | 0], i * cw, y - rowH);
     }
-  }, 3000);
-}
-
-goBtn.addEventListener('click', jackIn);
-urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') jackIn(); });
-
-// ---------- Side panels (dock) ----------
-document.getElementById('specs-toggle').addEventListener('click', () => togglePanel('specs-panel'));
-document.getElementById('oracle-toggle').addEventListener('click', () => togglePanel('oracle-panel'));
-document.querySelectorAll('.panel-close').forEach(btn => {
-  btn.addEventListener('click', () => document.getElementById(btn.dataset.close).classList.remove('open'));
-});
-
-function togglePanel(id) {
-  const el = document.getElementById(id);
-  const opening = !el.classList.contains('open');
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('open'));
-  if (opening) {
-    el.classList.add('open');
-    if (id === 'specs-panel') loadSpecs();
+    c.y += c.speed;
+    if (y > innerHeight && Math.random() > 0.985) { c.y = -2; c.speed = 0.35 + Math.random() * 0.5; }
   }
 }
+if (!matchMedia('(prefers-reduced-motion: reduce)').matches) requestAnimationFrame(tick);
+else document.querySelector('#costat b').textContent = 'reduced';
 
-// ---------- SPECS: local machine readout, no API calls, no tokens ----------
-const specsBody = document.getElementById('specs-body');
-let specsPoll = null;
+// ---- rendering helpers ---------------------------------------------------
+const results = document.getElementById('results');
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+function row(k, v, cls) {
+  const r = el('div', 'row');
+  r.append(el('span', 'k', k), el('span', 'v' + (cls ? ' ' + cls : ''), v));
+  return r;
+}
+function pill(text, kind) { return el('span', 'pill p-' + kind, text); }
 
-function bar(percent) {
-  return `<div class="specs-bar"><div class="specs-bar-fill" style="width:${percent}%"></div></div>`;
+const STAGE_NAMES = { resolve: 'Resolve', http: 'Transport', tls: 'Certificate', trust: 'Interception', headers: 'Posture', fatal: 'Error' };
+
+function stageCard(d) {
+  const card = el('div', 'stage ' + d.status);
+  card.dataset.stage = d.stage;
+  const head = el('div', 'stage-head');
+  head.append(el('span', 'name', STAGE_NAMES[d.stage] || d.stage));
+  const verdict = el('span', 'verdict');
+  head.append(verdict);
+  const msEl = el('span', 'ms');
+  head.append(msEl);
+  card.append(head);
+  const body = el('div', 'stage-body');
+  card.append(body);
+  card._v = verdict; card._ms = msEl; card._body = body;
+  return card;
 }
 
-function renderSpecs(s) {
-  specsBody.innerHTML = `
-    <div class="specs-section">
-      <div class="specs-row"><span>HOST</span><span>${s.hostname}</span></div>
-      <div class="specs-row"><span>OS</span><span>${s.os}</span></div>
-    </div>
-    <div class="specs-section">
-      <div class="specs-row"><span>CPU</span><span>${s.cpu.model}</span></div>
-      <div class="specs-row"><span>CORES</span><span>${s.cpu.physicalCores} phys / ${s.cpu.cores} logical @ ${s.cpu.speedGhz}GHz</span></div>
-      <div class="specs-row"><span>LOAD</span><span>${s.cpu.loadPercent}%</span></div>
-      ${bar(s.cpu.loadPercent)}
-      ${s.cpu.tempC != null ? `<div class="specs-row"><span>TEMP</span><span>${s.cpu.tempC}&deg;C</span></div>` : ''}
-    </div>
-    <div class="specs-section">
-      <div class="specs-row"><span>RAM</span><span>${s.memory.usedGb} / ${s.memory.totalGb} GB</span></div>
-      ${bar(s.memory.usedPercent)}
-    </div>
-    <div class="specs-section">
-      ${s.disks.map(d => `
-        <div class="specs-row"><span>DISK ${d.mount}</span><span>${d.usedPercent}% of ${d.totalGb}GB</span></div>
-        ${bar(d.usedPercent)}
-      `).join('')}
-    </div>
-    <div class="specs-section">
-      ${s.gpu.length ? s.gpu.map(g => `
-        <div class="specs-row"><span>GPU</span><span>${g.model}${g.vramMb ? ` (${g.vramMb}MB)` : ''}</span></div>
-      `).join('') : '<div class="specs-row"><span>GPU</span><span>none detected</span></div>'}
-    </div>
-  `;
-}
+function fillStage(card, d) {
+  card.className = 'stage ' + d.status;
+  const b = card._body; b.replaceChildren();
+  if (d.elapsed_ms != null) card._ms.textContent = d.elapsed_ms + 'ms';
 
-async function loadSpecs() {
-  try {
-    const res = await fetch('/api/specs');
-    const data = await res.json();
-    if (data.error) { specsBody.textContent = `[ ${data.error} ]`; return; }
-    renderSpecs(data);
-  } catch (err) {
-    specsBody.textContent = '[ specs server unreachable -- run "node server.js" ]';
+  if (d.status === 'failed') {
+    card._v.replaceChildren(pill('FAIL', 'crit'), document.createTextNode(' ' + d.error));
+    (d.candidates || []).forEach(c => b.append(row(c.name, (c.ok ? 'ok' : c.error) + '  ' + c.elapsed_ms + 'ms', c.ok ? 'live' : 'mute')));
+    return;
   }
-  if (!specsPoll) specsPoll = setInterval(loadSpecs, 3000); // cheap local poll, no tokens involved
-}
 
-// ---------- ORACLE: chat panel backed by the Claude API ----------
-const oracleLog = document.getElementById('oracle-log');
-const oracleInput = document.getElementById('oracle-input');
-const oracleSend = document.getElementById('oracle-send');
-let oracleHistory = [];
+  if (d.stage === 'resolve') {
+    card._v.textContent = d.literal ? 'address literal — no DNS needed' : d.host + '  ' + d.resolved;
+    if (d.raced) {
+      b.append(row('candidates', 'raced in parallel — first A record wins', 'mute'));
+      d.candidates.forEach(c => b.append(row(c.name, c.ok ? `${c.addr}  ${c.elapsed_ms}ms` : `${c.error}  ${c.elapsed_ms}ms`, c.ok ? 'live' : 'mute')));
+    }
+  }
 
-function oracleAppend(role, text) {
-  const line = document.createElement('div');
-  line.className = `oracle-${role}`;
-  line.textContent = (role === 'user' ? '> ' : 'ORACLE: ') + text;
-  oracleLog.appendChild(line);
-  oracleLog.scrollTop = oracleLog.scrollHeight;
-  return line;
-}
+  if (d.stage === 'http') {
+    card._v.textContent = `HTTP ${d.status_code} · ${d.hops.length} hop${d.hops.length > 1 ? 's' : ''} · ${d.bytes} bytes`;
+    const t = el('div', 'timing');
+    [['dns', d.timing.dns_ms], ['tcp', d.timing.tcp_ms], ['tls', d.timing.tls_ms], ['ttfb', d.timing.ttfb_ms], ['total', d.timing.total_ms]]
+      .forEach(([lab, val]) => {
+        if (val == null) return;
+        const c = el('div'); c.append(el('span', 'lab', lab), el('span', 'val', val + 'ms')); t.append(c);
+      });
+    b.append(t);
+    if (d.hops.length > 1 || d.plaintext_hop) {
+      const chain = el('div', 'chain');
+      d.hops.forEach(h => {
+        const hop = el('div', 'hop' + (h.insecure ? ' insecure' : ''));
+        hop.append(el('span', 'code', String(h.status)), el('span', 'u', h.url));
+        chain.append(hop);
+      });
+      b.append(chain);
+    }
+    if (d.plaintext_hop) b.append(row('warning', 'redirect chain traverses plaintext http', 'mute'));
+  }
 
-async function oracleAsk() {
-  const msg = oracleInput.value.trim();
-  if (!msg) return;
-  oracleInput.value = '';
-  oracleAppend('user', msg);
+  if (d.stage === 'tls') {
+    if (!d.cert) { card._v.textContent = d.reason || 'no certificate'; return; }
+    const c = d.cert;
+    card._v.textContent = `${c.protocol} · ${c.cipher}`;
+    b.append(row('issuer', c.issuer || '—'));
+    b.append(row('expires', `${c.valid_to} · ${c.days_remaining}d remaining`, c.days_remaining < 21 ? 'mute' : ''));
+    if (c.authorization_error) b.append(row('chain', c.authorization_error, 'mute'));
+    if (c.san) b.append(row('san', c.san.length > 180 ? c.san.slice(0, 180) + ' …' : c.san, 'mute'));
+    b.append(row('fingerprint', (c.fingerprint256 || '').slice(0, 47) + '…', 'mute'));
+  }
 
-  const historyToSend = oracleHistory.slice();
-  oracleHistory.push({ role: 'user', content: msg });
+  if (d.stage === 'trust') {
+    if (!d.available) { card._v.textContent = d.reason; return; }
+    const kind = d.verdict === 'clean' ? 'ok' : d.verdict === 'os-distrust' ? 'warn' : 'crit';
+    const labelFor = { clean: 'CLEAN', intercepted: 'INTERCEPTED', 'os-distrust': 'OS DISTRUST', untrusted: 'UNTRUSTED' };
+    card._v.replaceChildren(pill(labelFor[d.verdict], kind), document.createTextNode(' ' + d.detail));
+    b.append(row('mozilla bundle', d.mozilla.ok ? 'accepts' : 'rejects — ' + d.mozilla.error, d.mozilla.ok ? 'live' : 'mute'));
+    b.append(row('os trust store', d.system.ok ? 'accepts' : 'rejects — ' + d.system.error, d.system.ok ? 'live' : 'mute'));
+  }
 
-  const pending = oracleAppend('assistant', '...');
-  try {
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: msg, history: historyToSend }),
+  if (d.stage === 'headers') {
+    const f = d.framing;
+    card._v.replaceChildren(
+      pill(f.frameable ? 'FRAMEABLE' : 'NOT FRAMEABLE', f.frameable ? 'ok' : 'warn'),
+      document.createTextNode(' ' + f.reason)
+    );
+    b.append(row('posture', `${d.posture.grade} · ${d.posture.score}/100` + (d.posture.missing.length ? '   missing: ' + d.posture.missing.map(m => m.label).join(', ') : '')));
+    if (d.server) b.append(row('server', d.server, 'mute'));
+    if (d.hsts) b.append(row('hsts', d.hsts, 'mute'));
+    d.cookies.forEach(c => {
+      const r = el('div', 'row');
+      r.append(el('span', 'k', 'cookie'));
+      const v = el('span', 'v');
+      v.append(document.createTextNode(c.name + '  '));
+      if (c.issues.length) v.append(pill(c.issues.join(' · '), c.issues.includes('no HttpOnly') ? 'crit' : 'warn'));
+      else v.append(pill('hardened', 'ok'));
+      r.append(v); b.append(r);
     });
-    const data = await res.json();
-    const reply = data.reply || data.error || '[no response]';
-    oracleHistory.push({ role: 'assistant', content: reply });
-
-    pending.textContent = 'ORACLE: ';
-    for (const ch of reply) {
-      pending.textContent += ch;
-      oracleLog.scrollTop = oracleLog.scrollHeight;
-      await new Promise(r => setTimeout(r, 6));
-    }
-  } catch (err) {
-    pending.textContent = 'ORACLE: [connection lost -- is "node server.js" running?]';
   }
 }
 
-oracleSend.addEventListener('click', oracleAsk);
-oracleInput.addEventListener('keydown', e => { if (e.key === 'Enter') oracleAsk(); });
+// ---- probe ---------------------------------------------------------------
+const input = document.getElementById('target');
+const goBtn = document.getElementById('go');
+let source = null;
+
+function probe() {
+  const value = input.value.trim();
+  if (!value) return;
+  if (source) source.close();
+  results.replaceChildren();
+  goBtn.disabled = true;
+  log(`probing ${value}`);
+
+  const cards = new Map();
+  source = new EventSource('/api/target?url=' + encodeURIComponent(value));
+
+  source.addEventListener('stage', (e) => {
+    const d = JSON.parse(e.data);
+    let card = cards.get(d.stage);
+    if (!card) { card = stageCard(d); cards.set(d.stage, card); results.append(card); }
+    if (d.status === 'running') { card._v.textContent = 'working…'; return; }
+    fillStage(card, d);
+    if (d.status === 'failed') log(`${d.stage} failed — ${d.error}`);
+  });
+
+  source.addEventListener('done', (e) => {
+    const d = JSON.parse(e.data);
+    log(d.ok ? `complete in ${d.elapsed_ms}ms` : 'probe aborted');
+    goBtn.disabled = false;
+    source.close(); source = null;
+  });
+
+  source.onerror = () => { log('stream closed'); goBtn.disabled = false; if (source) { source.close(); source = null; } };
+}
+
+goBtn.addEventListener('click', probe);
+input.addEventListener('keydown', (e) => { if (e.key === 'Enter') probe(); });
+input.focus();
+
+// ---- host readout --------------------------------------------------------
+async function specs() {
+  try {
+    const r = await fetch('/api/specs');
+    const s = await r.json();
+    if (s.error) return;
+    document.getElementById('hoststat').textContent =
+      `${s.hostname} · ${s.cpu.cores}c ${s.cpu.loadPercent}% · ${s.memory.usedGb}/${s.memory.totalGb}GB`;
+  } catch { /* server not reachable — leave the dash */ }
+}
+specs(); setInterval(specs, 5000);
+
+log('CONSTRUCT ready — probe is server-side, no iframe, no rendering engine');
 </script>
 
 </body>
