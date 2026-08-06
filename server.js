@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const si = require('systeminformation');
 const { probeTarget } = require('./lib/target');
+const { census } = require('./lib/homefront');
 
 const PORT = process.env.PORT || 4173; // EDIT: change if 4173 is taken
 const PUBLIC_DIR = __dirname;
@@ -172,8 +173,22 @@ async function handleChat(req, res) {
   });
 }
 
+// --- HOMEFRONT: socket census. Deterministic, zero API calls. -------------
+async function handleCensus(req, res) {
+  try {
+    const data = await census();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(data));
+  } catch (err) {
+    console.error('[census]', err.message);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: err.message }));
+  }
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === 'GET' && url.pathname === '/api/census') return handleCensus(req, res);
   if (req.method === 'GET' && url.pathname === '/api/target') return handleTarget(req, res, url);
   if (req.method === 'GET' && url.pathname === '/api/specs') return handleSpecs(req, res);
   if (req.method === 'POST' && url.pathname === '/api/chat') return handleChat(req, res);

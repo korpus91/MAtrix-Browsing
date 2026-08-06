@@ -190,6 +190,7 @@
   <div id="bar">
     <input id="target" type="text" placeholder="domain or url — try: cnn" autocomplete="off" spellcheck="false">
     <button id="go">Probe</button>
+    <button id="census" title="Every socket on this machine, and who owns it">Homefront</button>
   </div>
 
   <div id="results">
@@ -424,6 +425,84 @@ function probe() {
 goBtn.addEventListener('click', probe);
 input.addEventListener('keydown', (e) => { if (e.key === 'Enter') probe(); });
 input.focus();
+
+// ---- HOMEFRONT: socket census -------------------------------------------
+// Deterministic and local. No API call, no tokens — code decides what is
+// ordinary, so only a genuinely unexplained row ever needs escalating.
+const censusBtn = document.getElementById('census');
+
+function censusCard(title, verdict, ms) {
+  const card = el('div', 'stage ok');
+  const head = el('div', 'stage-head');
+  head.append(el('span', 'name', title));
+  const v = el('span', 'verdict');
+  if (typeof verdict === 'string') v.textContent = verdict; else v.append(...verdict);
+  head.append(v);
+  if (ms != null) head.append(el('span', 'ms', ms + 'ms'));
+  card.append(head);
+  const body = el('div', 'stage-body');
+  card.append(body);
+  return { card, body };
+}
+
+async function runCensus() {
+  censusBtn.disabled = true;
+  results.replaceChildren();
+  log('census: enumerating sockets');
+  try {
+    const r = await fetch('/api/census');
+    const c = await r.json();
+    if (c.error) throw new Error(c.error);
+
+    const t = c.totals;
+    const summary = censusCard('Census',
+      `${t.established} established · ${t.listening} listening · ${t.processes} processes`, c.elapsed_ms);
+    summary.body.append(row('platform', c.platform + (c.privileged ? '' : ' — process names unavailable without elevation'), c.privileged ? '' : 'mute'));
+    summary.body.append(row('sockets', `${t.rows} total rows enumerated`, 'mute'));
+    results.append(summary.card);
+
+    const proc = censusCard('By process', `${c.processes.length} process${c.processes.length === 1 ? '' : 'es'} holding outbound connections`);
+    if (!c.processes.length) proc.body.append(row('—', 'no established outbound connections', 'mute'));
+    c.processes.forEach((p) => {
+      const r2 = el('div', 'row');
+      r2.append(el('span', 'k', p.process || 'pid ' + p.pid));
+      const v = el('span', 'v');
+      v.append(document.createTextNode(p.count + '  '));
+      v.append(el('span', 'mute', p.peers.map((x) => x.host + (x.n > 1 ? ' ×' + x.n : '')).join('  ')));
+      r2.append(v);
+      proc.body.append(r2);
+    });
+    results.append(proc.card);
+
+    const anyExposed = c.exposed.length > 0;
+    const listen = censusCard('Listeners',
+      [pill(anyExposed ? c.exposed.length + ' REACHABLE' : 'NONE REACHABLE', anyExposed ? 'warn' : 'ok'),
+       document.createTextNode(' loopback-only listeners are not reachable from the network and are omitted')]);
+    c.exposed.forEach((l) => {
+      const r3 = el('div', 'row');
+      r3.append(el('span', 'k', l.proto + ' ' + l.port));
+      const v = el('span', 'v');
+      v.append(document.createTextNode((l.process || 'unattributed') + '  '));
+      v.append(pill(l.exposure, l.severity === 'warning' ? 'crit' : 'warn'));
+      v.append(document.createTextNode('  bound ' + l.bind));
+      r3.append(v);
+      listen.body.append(r3);
+    });
+    if (!anyExposed) listen.body.append(row('—', 'every listener is bound to loopback', 'mute'));
+    results.append(listen.card);
+
+    log(`census complete in ${c.elapsed_ms}ms — ${t.established} established, ${t.exposed} reachable listeners`);
+  } catch (err) {
+    const { card, body } = censusCard('Census', 'failed');
+    card.className = 'stage failed';
+    body.append(row('error', err.message));
+    results.append(card);
+    log('census failed — ' + err.message);
+  }
+  censusBtn.disabled = false;
+}
+
+censusBtn.addEventListener('click', runCensus);
 
 // ---- host readout --------------------------------------------------------
 async function specs() {
