@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MATRIX // WEB ACCESS TERMINAL</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root {
+    --green: #00ff41;
+    --green-dim: #0a3b18;
+    --bg: #000000;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; background: var(--bg);
+    font-family: "Courier New", Consolas, monospace;
+    overflow: hidden;
+    color: var(--green);
+  }
+  #rain {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0;
+  }
+  #boot {
+    position: fixed; inset: 0; z-index: 20;
+    background: rgba(0,0,0,0.92);
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column;
+    padding: 20px; text-align: left;
+  }
+  #bootText {
+    white-space: pre-wrap;
+    font-size: 15px;
+    line-height: 1.5em;
+    max-width: 700px;
+    text-shadow: 0 0 6px var(--green);
+  }
+  #skipHint {
+    margin-top: 20px; opacity: 0.5; font-size: 12px;
+  }
+  #app {
+    position: relative; z-index: 10;
+    display: none;
+    flex-direction: column;
+    height: 100vh;
+    padding: 18px;
+  }
+  #app.visible { display: flex; }
+  header {
+    display: flex; align-items: baseline; gap: 12px;
+    border-bottom: 1px solid var(--green-dim);
+    padding-bottom: 10px; margin-bottom: 10px;
+    text-shadow: 0 0 6px var(--green);
+  }
+  header h1 { font-size: 16px; margin: 0; letter-spacing: 2px; }
+  header .status { font-size: 11px; opacity: 0.6; }
+  #bar {
+    display: flex; gap: 8px; margin-bottom: 10px;
+  }
+  #url {
+    flex: 1;
+    background: #000; border: 1px solid var(--green);
+    color: var(--green); padding: 10px 12px; font-family: inherit;
+    font-size: 14px; outline: none; text-shadow: 0 0 4px var(--green);
+  }
+  #url::placeholder { color: var(--green-dim); }
+  button {
+    background: #000; border: 1px solid var(--green); color: var(--green);
+    padding: 10px 16px; font-family: inherit; cursor: pointer; font-size: 13px;
+    letter-spacing: 1px; text-shadow: 0 0 4px var(--green);
+  }
+  button:hover { background: var(--green); color: #000; text-shadow: none; }
+  #log {
+    height: 90px; overflow-y: auto; font-size: 12px; opacity: 0.85;
+    border: 1px solid var(--green-dim); padding: 6px 10px; margin-bottom: 10px;
+    background: rgba(0,20,5,0.4);
+  }
+  #log div { margin: 2px 0; }
+  #viewport {
+    flex: 1; position: relative; border: 1px solid var(--green);
+    background: #000;
+    overflow: hidden;
+  }
+  #viewport iframe {
+    width: 100%; height: 100%; border: none;
+    filter: grayscale(1) sepia(1) hue-rotate(60deg) saturate(4) brightness(0.9) contrast(1.1);
+    background: #000;
+  }
+  #scanlines {
+    position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom, rgba(0,255,65,0.04) 0px, rgba(0,255,65,0.04) 1px,
+      transparent 2px, transparent 3px
+    );
+    mix-blend-mode: overlay;
+  }
+  #placeholder {
+    position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; text-align: center; padding: 20px; font-size: 13px; opacity: 0.7;
+  }
+  .blink { animation: blink 1s step-start infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+</style>
+</head>
+<body>
+
+<canvas id="rain"></canvas>
+
+<div id="boot">
+  <div id="bootText"></div>
+  <div id="skipHint">press any key or click to skip</div>
+</div>
+
+<div id="app">
+  <header>
+    <h1>&gt; WEB ACCESS TERMINAL</h1>
+    <span class="status">connection: encrypted // node: unknown</span>
+  </header>
+
+  <div id="bar">
+    <input id="url" type="text" placeholder="enter destination url, e.g. wikipedia.org" autocomplete="off">
+    <button id="go">JACK IN</button>
+  </div>
+
+  <div id="log"></div>
+
+  <div id="viewport">
+    <div id="placeholder">
+      [ NO SIGNAL ]<br><br>
+      Type an address above and hit JACK IN.<br>
+      Some sites refuse to be viewed through the wire (X-Frame-Options / CSP) — those will open in a new portal instead.
+    </div>
+    <div id="scanlines"></div>
+  </div>
+</div>
+
+<script>
+// ---------- Matrix digital rain ----------
+const canvas = document.getElementById('rain');
+const ctx = canvas.getContext('2d');
+let cols, drops;
+const chars = "アイウエオカキクケコサシスセソタチツテト0123456789ZXCVBNM";
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  cols = Math.floor(canvas.width / 16);
+  drops = new Array(cols).fill(0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+function drawRain() {
+  ctx.fillStyle = 'rgba(0,0,0,0.06)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#00ff41';
+  ctx.font = '15px monospace';
+  for (let i = 0; i < drops.length; i++) {
+    const text = chars[Math.floor(Math.random() * chars.length)];
+    ctx.fillText(text, i * 16, drops[i] * 16);
+    if (drops[i] * 16 > canvas.height && Math.random() > 0.975) drops[i] = 0;
+    drops[i]++;
+  }
+}
+setInterval(drawRain, 40);
+
+// ---------- Boot sequence ----------
+const bootLines = [
+  "WAKE UP...",
+  "THE TERMINAL IS OPENING.",
+  "",
+  "> establishing uplink..........[OK]",
+  "> spoofing node signature......[OK]",
+  "> loading render filters.......[OK]",
+  "> web access module............[READY]",
+  "",
+  "Follow the white rabbit."
+];
+const bootText = document.getElementById('bootText');
+const boot = document.getElementById('boot');
+const app = document.getElementById('app');
+let bootDone = false;
+
+async function typeBoot() {
+  for (const line of bootLines) {
+    for (const ch of line) {
+      if (bootDone) return;
+      bootText.textContent += ch;
+      await new Promise(r => setTimeout(r, 12));
+    }
+    bootText.textContent += "\n";
+    await new Promise(r => setTimeout(r, 180));
+  }
+  await new Promise(r => setTimeout(r, 700));
+  enterApp();
+}
+
+function enterApp() {
+  if (bootDone) return;
+  bootDone = true;
+  boot.style.display = 'none';
+  app.classList.add('visible');
+}
+document.addEventListener('keydown', enterApp);
+boot.addEventListener('click', enterApp);
+typeBoot();
+
+// ---------- Web access ----------
+const urlInput = document.getElementById('url');
+const goBtn = document.getElementById('go');
+const viewport = document.getElementById('viewport');
+const placeholder = document.getElementById('placeholder');
+const logEl = document.getElementById('log');
+
+function log(msg) {
+  const d = document.createElement('div');
+  const t = new Date().toLocaleTimeString();
+  d.textContent = `[${t}] ${msg}`;
+  logEl.appendChild(d);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function normalizeUrl(raw) {
+  raw = raw.trim();
+  if (!raw) return null;
+  if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
+  return raw;
+}
+
+function jackIn() {
+  const target = normalizeUrl(urlInput.value);
+  if (!target) { log('no destination entered.'); return; }
+
+  log(`connecting to ${target} ...`);
+  placeholder.style.display = 'none';
+
+  const old = viewport.querySelector('iframe');
+  if (old) old.remove();
+
+  const iframe = document.createElement('iframe');
+  iframe.src = target;
+
+  let loaded = false;
+  iframe.onload = () => { loaded = true; log(`link established: ${target}`); };
+  viewport.insertBefore(iframe, viewport.querySelector('#scanlines'));
+
+  // Many sites block iframe embedding outright (X-Frame-Options/CSP).
+  // The browser will silently fail to render in that case, so fall back
+  // to opening a real tab after a short grace period.
+  setTimeout(() => {
+    if (!loaded) {
+      log(`${target} refused the wire (frame blocked). opening external portal.`);
+      window.open(target, '_blank', 'noopener,noreferrer');
+    }
+  }, 3000);
+}
+
+goBtn.addEventListener('click', jackIn);
+urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') jackIn(); });
+</script>
+
+</body>
+</html>
