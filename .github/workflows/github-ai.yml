@@ -16,13 +16,25 @@ jobs:
         env: { CF_AI_TOKEN: "${{ secrets.CF_AI_TOKEN }}", CF_ACCOUNT_ID: "${{ secrets.CF_ACCOUNT_ID }}" }
         with:
           script: |
+            // CHANGED 2026-11-13: the review comment came back empty. Workers AI defaults max_tokens to 256 and this reasoning model
+            // spends that on thinking, so no text was left; and `??` kept an empty `response` string instead of reading the other shapes.
+            // Now: max_tokens set, every known response shape read, and an empty answer fails the job instead of posting a blank comment.
+            const text = (o) => {
+              if (typeof o?.response === 'string' && o.response.trim()) return o.response;
+              if (typeof o?.output_text === 'string' && o.output_text.trim()) return o.output_text;
+              const c = o?.choices?.[0]?.message?.content; if (typeof c === 'string' && c.trim()) return c;
+              if (Array.isArray(o?.output)) return o.output.filter((x) => x?.type !== 'reasoning' && Array.isArray(x?.content)).flatMap((x) => x.content).map((p) => (typeof p === 'string' ? p : p?.text ?? '')).join('');
+              return '';
+            };
             const ask = async (system, user) => {
               const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${process.env.CF_ACCOUNT_ID}/ai/run/@cf/openai/gpt-oss-120b`, {
                 method: 'POST', headers: { Authorization: `Bearer ${process.env.CF_AI_TOKEN}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }) });
-              const j = await r.json(); if (!j.success) throw new Error(`Workers AI: ${JSON.stringify(j.errors)}`);
-              const o = j.result ?? {};
-              return (o.response ?? o.choices?.[0]?.message?.content ?? (o.output ?? []).flatMap((x) => x.content ?? []).map((c) => c.text ?? '').join('')).trim();
+                body: JSON.stringify({ messages: [{ role: 'system', content: system }, { role: 'user', content: user }], max_tokens: 8192 }) });
+              let j; try { j = await r.json(); } catch { throw new Error(`Workers AI: HTTP ${r.status}, the reply was not JSON`); }
+              if (!j.success) throw new Error(`Workers AI: HTTP ${r.status} ${JSON.stringify(j.errors)}`);
+              const t = text(j.result ?? {}).trim();
+              if (!t) throw new Error(`Workers AI returned no text. Result keys: ${Object.keys(j.result ?? {}).join(',')}; usage: ${JSON.stringify(j.result?.usage ?? null)}`);
+              return t;
             };
             const { owner, repo } = context.repo;
             if (context.eventName === 'pull_request') {
